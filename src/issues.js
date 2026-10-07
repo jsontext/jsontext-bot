@@ -3,25 +3,10 @@ import { SlashCommandBuilder, EmbedBuilder, Events, MessageFlags } from "discord
 export const issueDefinition = new SlashCommandBuilder()
   .setName("issue")
   .setDescription("Post an issue to the issues channel")
-  .addStringOption((o) =>
-    o
-      .setName("status")
-      .setDescription("Issue status")
-      .setRequired(true)
-      .addChoices(
-        { name: "completed", value: "completed" },
-        { name: "volatile", value: "volatile" },
-        { name: "working", value: "working" }
-      )
-  )
   .addStringOption((o) => o.setName("description").setDescription("Description").setRequired(true).setMaxLength(2000))
   .toJSON();
 
-const STATUS = {
-  completed: { label: "Completed", color: 0x57f287 },
-  volatile: { label: "Volatile", color: 0x5865f2 },
-  working: { label: "Working", color: 0xe67e22 },
-};
+const EMBED_COLOR = 0x808080;
 
 export function setupIssues(client, config) {
   client.on(Events.InteractionCreate, async (interaction) => {
@@ -33,9 +18,7 @@ export function setupIssues(client, config) {
         return;
       }
 
-      const statusValue = interaction.options.getString("status");
       const description = interaction.options.getString("description");
-      const meta = STATUS[statusValue] || { label: statusValue, color: 0x5865f2 };
 
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
@@ -53,11 +36,12 @@ export function setupIssues(client, config) {
           ? member.displayAvatarURL()
           : interaction.user.displayAvatarURL();
 
+      const unix = Math.floor(Date.now() / 1000);
+
       const embed = new EmbedBuilder()
-        .setAuthor({ name: authorName, iconURL: authorIcon })
-        .setColor(meta.color)
-        .setDescription(description)
-        .setTimestamp(new Date());
+        .setAuthor({ name: `${authorName} • <t:${unix}:f>`, iconURL: authorIcon })
+        .setColor(EMBED_COLOR)
+        .setDescription(description);
 
       const message = await channel.send({ embeds: [embed] });
       await interaction.editReply({
