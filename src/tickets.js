@@ -1,5 +1,4 @@
 import {
-  SlashCommandBuilder,
   ChannelType,
   PermissionFlagsBits,
   EmbedBuilder,
@@ -17,17 +16,6 @@ import {
 } from "discord.js";
 import { nextTicketNumber, addTicket, getTicket, removeTicket } from "./store.js";
 
-export const ticketDefinition = new SlashCommandBuilder()
-  .setName("ticket")
-  .setDescription("Open a support ticket")
-  .toJSON();
-
-export const panelDefinition = new SlashCommandBuilder()
-  .setName("ticketpanel")
-  .setDescription("Post the ticket panel with instructions")
-  .addChannelOption((o) => o.setName("channel").setDescription("Channel to post the panel in (defaults to current)"))
-  .toJSON();
-
 const MEMBER_ALLOW = [
   PermissionFlagsBits.ViewChannel,
   PermissionFlagsBits.SendMessages,
@@ -39,47 +27,14 @@ const MEMBER_ALLOW = [
 const TICKET_TYPES = [
   { label: "Report a user", value: "report_user", description: "Report a member for breaking rules" },
   { label: "Appeal", value: "appeal", description: "Appeal a ban, kick, or timeout" },
-  { label: "Technical / Bug", value: "bug", description: "Report a bug or technical problem" },
-  { label: "Purchase / Robux", value: "purchase", description: "Issues with a purchase or Robux" },
+  { label: "Technical", value: "bug", description: "Report a bug or technical problem" },
+  { label: "Purchase", value: "purchase", description: "Issues with a purchase or Robux" },
   { label: "General question", value: "question", description: "Ask staff a general question" },
-];
-
-const PANEL_INTRO =
-  "Need help from staff? Click the **Open Ticket** button below.\n\n" +
-  "**How to open a ticket**\n" +
-  "1. Click **Open Ticket**\n" +
-  "2. Choose a category and complete every field\n" +
-  "3. A private channel is created for you and staff\n\n" +
-  "**Support Rules**";
-
-const RULES = [
-  {
-    title: "1. Complete All Mandatory Fields Before Submission",
-    body: "Every designated prompt, template question, and required field must be accurately and thoroughly filled out before opening a ticket. Submissions containing placeholder text, incomplete details, or blank responses will be closed without action until proper information is provided.",
-  },
-  {
-    title: "2. Tickets Are for Legitimate Support Only: No Trolling or Pranks",
-    body: "The ticketing system is reserved strictly for genuine inquiries, technical help, and server reports. Opening tickets to spam, test bots, send memes, troll staff, or waste moderator time will result in an immediate ticket termination and a temporary or permanent restriction from support channels.",
-  },
-  {
-    title: "3. Protect Confidentiality: Do Not Share Personal Identifiable Information (PII)",
-    body: "For the safety of everyone involved, never share your own or anyone else's private personal information within tickets. This includes real names, physical addresses, phone numbers, private photos, passwords, financial records, IP addresses, or off-platform communication logs without consent.",
-  },
-  {
-    title: "4. Keep Inquiries Focused and Professional",
-    body: "Use one ticket per individual issue, explain your problem clearly in a single descriptive overview, and avoid opening multiple tickets for the same request. Maintaining clear, concise, and courteous communication allows our support team to investigate and resolve your request as efficiently as possible.",
-  },
 ];
 
 export function setupTickets(client, config) {
   client.on(Events.InteractionCreate, async (interaction) => {
     try {
-      if (interaction.isChatInputCommand() && interaction.commandName === "ticket") {
-        return await showTicketModal(interaction, config);
-      }
-      if (interaction.isChatInputCommand() && interaction.commandName === "ticketpanel") {
-        return await postPanel(client, interaction, config);
-      }
       if (interaction.isButton() && interaction.customId === "ticket:open") {
         return await showTicketModal(interaction, config);
       }
@@ -129,52 +84,13 @@ async function showTicketModal(interaction, config) {
     .setMaxLength(1500)
     .setRequired(true);
 
-  const evidenceInput = new TextInputBuilder()
-    .setCustomId("evidence")
-    .setStyle(TextInputStyle.Paragraph)
-    .setPlaceholder("Optional: links or references to evidence")
-    .setMaxLength(1000)
-    .setRequired(false);
-
   const modal = new ModalBuilder().setCustomId("ticket:create").setTitle("Open a Ticket").addLabelComponents(
-    new LabelBuilder().setLabel("Ticket type").setStringSelectMenuComponent(typeSelect),
+    new LabelBuilder().setLabel("Category").setStringSelectMenuComponent(typeSelect),
     new LabelBuilder().setLabel("Summary").setTextInputComponent(summaryInput),
-    new LabelBuilder().setLabel("What happened?").setTextInputComponent(detailsInput),
-    new LabelBuilder().setLabel("Evidence (optional)").setTextInputComponent(evidenceInput)
+    new LabelBuilder().setLabel("What happened?").setTextInputComponent(detailsInput)
   );
 
   await interaction.showModal(modal);
-}
-
-async function postPanel(client, interaction, config) {
-  if (!interaction.inGuild() || !config.ticketCategoryId || !config.staffRoleId) {
-    await interaction.reply({ content: "Tickets are not configured.", flags: MessageFlags.Ephemeral });
-    return;
-  }
-  if (!interaction.member.roles.cache.has(config.staffRoleId)) {
-    await interaction.reply({ content: "Only staff can post the ticket panel.", flags: MessageFlags.Ephemeral });
-    return;
-  }
-
-  const target = interaction.options.getChannel("channel") || interaction.channel;
-  if (!target || !target.isTextBased()) {
-    await interaction.reply({ content: "Invalid channel.", flags: MessageFlags.Ephemeral });
-    return;
-  }
-
-  const rulesText = RULES.map((r) => `**${r.title}**\n${r.body}`).join("\n\n");
-
-  const embed = new EmbedBuilder()
-    .setTitle("Server Support Tickets")
-    .setDescription(`${PANEL_INTRO}\n\n${rulesText}`)
-    .setColor(0x5865f2);
-
-  const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId("ticket:open").setLabel("Open Ticket").setStyle(ButtonStyle.Primary)
-  );
-
-  await target.send({ embeds: [embed], components: [row] });
-  await interaction.reply({ content: `Panel posted in <#${target.id}>.`, flags: MessageFlags.Ephemeral });
 }
 
 async function createTicket(client, interaction, config) {
@@ -182,7 +98,6 @@ async function createTicket(client, interaction, config) {
   const typeLabel = (TICKET_TYPES.find((t) => t.value === typeValue) || {}).label || typeValue;
   const summary = interaction.fields.getTextInputValue("summary");
   const details = interaction.fields.getTextInputValue("details");
-  const evidence = interaction.fields.getTextInputValue("evidence");
 
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
@@ -214,8 +129,6 @@ async function createTicket(client, interaction, config) {
       { name: "Details", value: details || "*(none)*" }
     )
     .setTimestamp(new Date());
-
-  if (evidence) embed.addFields({ name: "Evidence", value: evidence });
 
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId("ticket:close").setLabel("Close Ticket").setStyle(ButtonStyle.Danger)

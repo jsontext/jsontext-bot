@@ -2,9 +2,10 @@ import "dotenv/config";
 import { Client, GatewayIntentBits, Partials, Events } from "discord.js";
 import { setupModLog } from "./modlog.js";
 import { setupMessageLog } from "./messagelog.js";
-import { setupTickets, ticketDefinition, panelDefinition } from "./tickets.js";
+import { setupTickets } from "./tickets.js";
 import { setupVerify, verifyDefinition } from "./verify.js";
 import { setupMessaging, sendDefinition, editDefinition } from "./messaging.js";
+import { setupIssues, issueDefinition } from "./issues.js";
 
 const config = {
   token: process.env.DISCORD_BOT_TOKEN,
@@ -13,6 +14,7 @@ const config = {
   messageLogChannelId: process.env.MESSAGE_LOG_CHANNEL_ID,
   staffRoleId: process.env.STAFF_ROLE_ID,
   ticketCategoryId: process.env.TICKET_CATEGORY_ID,
+  issueChannelId: process.env.ISSUE_CHANNEL_ID,
   hmacSecret: process.env.HMAC_SECRET,
   verifyBaseUrl: process.env.VERIFY_BASE_URL || "https://jsontext.me",
 };
@@ -44,8 +46,8 @@ client.once(Events.ClientReady, async (c) => {
   if (config.guildId) {
     try {
       const guild = await c.guilds.fetch(config.guildId);
-      await guild.commands.set([verifyDefinition, ticketDefinition, panelDefinition, sendDefinition, editDefinition]);
-      console.log("Registered guild commands: /verify, /ticket, /ticketpanel, /send, /edit");
+      await guild.commands.set([verifyDefinition, issueDefinition, sendDefinition, editDefinition]);
+      console.log("Registered guild commands: /verify, /issue, /send, /edit");
     } catch (err) {
       console.error("command registration failed", err && err.rawError ? JSON.stringify(err.rawError, null, 2) : err);
     }
@@ -57,6 +59,7 @@ setupMessageLog(client, config);
 setupTickets(client, config);
 setupVerify(client, config);
 setupMessaging(client, config);
+setupIssues(client, config);
 
 client.on(Events.Error, (err) => console.error("client error", err));
 client.on(Events.Warn, (msg) => console.warn("client warn", msg));
