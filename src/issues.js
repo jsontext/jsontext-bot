@@ -12,9 +12,21 @@ export const issueDefinition = new SlashCommandBuilder()
   )
   .toJSON();
 
-const EMBED_COLOR = 0x808080;
-const CHUNK = 3800;
+const EMBED_COLOR = 0x2f3136;
+const CHUNK = 3900;
 const MAX_EMBEDS = 10;
+
+function formatBody(lines) {
+  return lines
+    .map((line) => {
+      if (!line.trim()) return line;
+      const m = line.match(/^(\s*)(\S+)([\s\S]*)$/);
+      if (!m) return line;
+      return `${m[1]}\`${m[2]}\`${m[3]}`;
+    })
+    .join("\n")
+    .trim();
+}
 
 export function setupIssues(client, config) {
   client.on(Events.InteractionCreate, async (interaction) => {
@@ -46,22 +58,20 @@ export function setupIssues(client, config) {
 
       const lines = raw.split("\n");
       const title = (lines[0] || "").slice(0, 256);
-      const body = lines.slice(1).join("\n").trim();
+      const body = formatBody(lines.slice(1));
 
       const chunks = [];
       if (body) {
         for (let i = 0; i < body.length; i += CHUNK) chunks.push(body.slice(i, i + CHUNK));
       }
 
-      const first = new EmbedBuilder()
-        .setColor(EMBED_COLOR)
-        .setAuthor({ name: authorName, iconURL: authorIcon });
+      const first = new EmbedBuilder().setColor(EMBED_COLOR).setAuthor({ name: authorName, iconURL: authorIcon });
       if (title) first.setTitle(title);
-      if (chunks[0]) first.setDescription("```\n" + chunks[0] + "\n```");
+      if (chunks[0]) first.setDescription(chunks[0]);
 
       const embeds = [first];
       for (let i = 1; i < chunks.length && embeds.length < MAX_EMBEDS; i++) {
-        embeds.push(new EmbedBuilder().setColor(EMBED_COLOR).setDescription("```\n" + chunks[i] + "\n```"));
+        embeds.push(new EmbedBuilder().setColor(EMBED_COLOR).setDescription(chunks[i]));
       }
 
       const message = await channel.send({ embeds });
