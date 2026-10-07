@@ -1,32 +1,12 @@
-import { SlashCommandBuilder, EmbedBuilder, Events, MessageFlags } from "discord.js";
+import { SlashCommandBuilder, Events, MessageFlags } from "discord.js";
 
 export const issueDefinition = new SlashCommandBuilder()
   .setName("issue")
   .setDescription("Post an issue to the issues channel")
   .addStringOption((o) =>
-    o
-      .setName("description")
-      .setDescription("First line becomes the title; the rest becomes the body")
-      .setRequired(true)
-      .setMaxLength(6000)
+    o.setName("description").setDescription("Issue content").setRequired(true).setMaxLength(6000)
   )
   .toJSON();
-
-const EMBED_COLOR = 0x2f3136;
-const CHUNK = 3900;
-const MAX_EMBEDS = 10;
-
-function formatBody(lines) {
-  return lines
-    .map((line) => {
-      if (!line.trim()) return line;
-      const m = line.match(/^(\s*)(\S+)([\s\S]*)$/);
-      if (!m) return line;
-      return `${m[1]}\`${m[2]}\`${m[3]}`;
-    })
-    .join("\n")
-    .trim();
-}
 
 export function setupIssues(client, config) {
   client.on(Events.InteractionCreate, async (interaction) => {
@@ -38,7 +18,7 @@ export function setupIssues(client, config) {
         return;
       }
 
-      const raw = interaction.options.getString("description") || "";
+      const description = interaction.options.getString("description");
 
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
@@ -48,35 +28,21 @@ export function setupIssues(client, config) {
         return;
       }
 
-      const member = interaction.member;
-      const authorName =
-        member && member.displayName ? member.displayName : interaction.user.globalName || interaction.user.username;
-      const authorIcon =
-        member && typeof member.displayAvatarURL === "function"
-          ? member.displayAvatarURL()
-          : interaction.user.displayAvatarURL();
+      const id = interaction.user.id;
+      const unix = Math.floor(Date.now() / 1000);
+      const content = `-# <@${id}> (${id}) have issued the content below.\n\n-# [ <t:${unix}:S> ] : ${description}`;
 
-      const lines = raw.split("\n");
-      const title = (lines[0] || "").slice(0, 256);
-      const body = formatBody(lines.slice(1));
+      const parts = [];
+      for (let i = 0; i < content.length; i += 2000) parts.push(content.slice(i, i + 2000));
 
-      const chunks = [];
-      if (body) {
-        for (let i = 0; i < body.length; i += CHUNK) chunks.push(body.slice(i, i + CHUNK));
+      let firstMessage = null;
+      for (const part of parts) {
+        const sent = await channel.send({ content: part, allowedMentions: { parse: [] } });
+        if (!firstMessage) firstMessage = sent;
       }
 
-      const first = new EmbedBuilder().setColor(EMBED_COLOR).setAuthor({ name: authorName, iconURL: authorIcon });
-      if (title) first.setTitle(title);
-      if (chunks[0]) first.setDescription(chunks[0]);
-
-      const embeds = [first];
-      for (let i = 1; i < chunks.length && embeds.length < MAX_EMBEDS; i++) {
-        embeds.push(new EmbedBuilder().setColor(EMBED_COLOR).setDescription(chunks[i]));
-      }
-
-      const message = await channel.send({ embeds });
       await interaction.editReply({
-        content: `Posted: https://discord.com/channels/${interaction.guildId}/${channel.id}/${message.id}`,
+        content: `Posted: https://discord.com/channels/${interaction.guildId}/${channel.id}/${firstMessage.id}`,
       });
     } catch (err) {
       console.error("issue command error", err);
