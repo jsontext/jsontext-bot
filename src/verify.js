@@ -1,5 +1,12 @@
 import crypto from "node:crypto";
-import { SlashCommandBuilder, Events, MessageFlags } from "discord.js";
+import {
+  SlashCommandBuilder,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
+  Events,
+  MessageFlags,
+} from "discord.js";
 
 export const verifyDefinition = new SlashCommandBuilder()
   .setName("verify")
@@ -15,20 +22,30 @@ export function signVerifyToken(discordId, secret, ttlSeconds = 900) {
 
 export function setupVerify(client, config) {
   client.on(Events.InteractionCreate, async (interaction) => {
-    if (!interaction.isChatInputCommand()) return;
-    if (interaction.commandName !== "verify") return;
-
-    if (!config.hmacSecret) {
-      await interaction.reply({ content: "Verification is not configured.", flags: MessageFlags.Ephemeral });
+    if (interaction.isChatInputCommand() && interaction.commandName === "verify") {
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId("verify:start").setLabel("Verify").setStyle(ButtonStyle.Primary)
+      );
+      await interaction.reply({
+        content: "Click the button below to verify your Roblox account.",
+        components: [row],
+      });
       return;
     }
 
-    const token = signVerifyToken(interaction.user.id, config.hmacSecret);
-    const link = `${config.verifyBaseUrl}/?t=${token}`;
+    if (interaction.isButton() && interaction.customId === "verify:start") {
+      if (!config.hmacSecret) {
+        await interaction.reply({ content: "Verification is not configured.", flags: MessageFlags.Ephemeral });
+        return;
+      }
 
-    await interaction.reply({
-      content: `**Verify your Roblox account**\n[Click here to verify](${link})\n\nThis link expires in 15 minutes.`,
-      flags: MessageFlags.Ephemeral,
-    });
+      const token = signVerifyToken(interaction.user.id, config.hmacSecret);
+      const link = `${config.verifyBaseUrl}/?t=${token}`;
+
+      await interaction.reply({
+        content: `**Verify your Roblox account**\n[Click here to verify](${link})\n\nThis link expires in 15 minutes.`,
+        flags: MessageFlags.Ephemeral,
+      });
+    }
   });
 }
