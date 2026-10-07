@@ -1,22 +1,23 @@
 import "dotenv/config";
-import {
-  Client,
-  GatewayIntentBits,
-  Events,
-  AuditLogEvent,
-  EmbedBuilder,
-} from "discord.js";
+import { Client, GatewayIntentBits, Partials, Events } from "discord.js";
+import { setupModLog } from "./modlog.js";
+import { setupMessageLog } from "./messagelog.js";
+import { setupTickets, ticketDefinition } from "./tickets.js";
+import { setupVerify, verifyDefinition } from "./verify.js";
 
-const token = process.env.DISCORD_BOT_TOKEN;
-const guildId = process.env.DISCORD_GUILD_ID;
-const logChannelId = process.env.LOG_CHANNEL_ID;
+const config = {
+  token: process.env.DISCORD_BOT_TOKEN,
+  guildId: process.env.DISCORD_GUILD_ID,
+  logChannelId: process.env.LOG_CHANNEL_ID,
+  messageLogChannelId: process.env.MESSAGE_LOG_CHANNEL_ID,
+  staffRoleId: process.env.STAFF_ROLE_ID,
+  ticketCategoryId: process.env.TICKET_CATEGORY_ID,
+  hmacSecret: process.env.HMAC_SECRET,
+  verifyBaseUrl: process.env.VERIFY_BASE_URL || "https://jsontext.me",
+};
 
-if (!token) {
+if (!config.token) {
   console.error("Missing DISCORD_BOT_TOKEN");
-  process.exit(1);
-}
-if (!logChannelId) {
-  console.error("Missing LOG_CHANNEL_ID");
   process.exit(1);
 }
 
@@ -25,124 +26,37 @@ const client = new Client({
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildModeration,
+    GatewayIntentBits.MessageContent,
   ],
+  partials: [Partials.Message, Partials.Channel, Partials.GuildMember],
 });
 
-const ACTIONS = {
-  [AuditLogEvent.MemberKick]: { title: "Member Kicked", color: 0xffa500 },
-  [AuditLogEvent.MemberBanAdd]: { title: "Member Banned", color: 0xed4245 },
-  [AuditLogEvent.MemberBanRemove]: { title: "Member Unbanned", color: 0x57f287 },
-};
-
-client.once(Events.ClientReady, (c) => {
+client.once(Events.ClientReady, async (c) => {
   console.log(`Logged in as ${c.user.tag}`);
-  console.log(`Watching guild: ${guildId || "(all)"}`);
+  console.log(`Watching guild: ${config.guildId || "(all)"}`);
+
   c.user.setPresence({
     status: "online",
     activities: [{ name: "moderation logs", type: 3 }],
   });
-});
 
-client.on(Events.GuildAuditLogEntryCreate, async (entry, guild) => {
-  if (guildId && guild.id !== guildId) return;
-
-  const action = ACTIONS[entry.action];
-  if (!action) return;
-
-  try {
-    const target = await resolveUser(guild, entry.targetId);
-    const executor = await resolveUser(guild, entry.executorId);
-
-    const embed = new EmbedBuilder()
-      .setTitle(action.title)
-      .setColor(action.color)
-      .addFields(
-        { name: "User", value: target ? `${target.tag ?? target.username} (${target.id})` : String(entry.targetId ?? "unknown") },
-        { name: "Moderator", value: executor ? `${executor.tag ?? executor.username} (${executor.id})` : String(entry.executorId ?? "unknown") },
-        { name: "Reason", value: entry.reason || "No reason provided" }
-      )
-      .setTimestamp(new Date());
-
-    if (target) embed.setThumbnail(target.displayAvatarURL());
-
-    await sendLog(guild, embed);
-  } catch (err) {
-    console.error("audit log handling error", err);
+  if (config.guildId) {
+    try {
+      const guild = await c.guilds.fetch(config.guildId);
+      await guild.commands.set([verifyDefinition, ticketDefinition]);
+      console.log("Registered guild commands: /verify, /ticket");
+    } catch (err) {
+      console.error("command registration failed", err);
+    }
   }
 });
 
-client.on(Events.GuildMemberUpdate, async (oldMember, newMember) => {
-  if (guildId && newMember.guild.id !== guildId) return;
-
-  const oldTs = oldMember.communicationDisabledUntilTimestamp;
-  const newTs = newMember.communicationDisabledUntilTimestamp;
-  if (oldTs === newTs) return;
-
-  const now = Date.now();
-  const isTimeout = Boolean(newTs) && newTs > now;
-
-  try {
-    const details = await findTimeoutEntry(newMember.guild, newMember.id);
-    const executor = details ? await resolveUser(newMember.guild, details.executorId) : null;
-
-    const embed = new EmbedBuilder()
-      .setTitle(isTimeout ? "Member Timed Out" : "Timeout Removed")
-      .setColor(isTimeout ? 0xfee75c : 0x57f287)
-      .addFields(
-        { name: "User", value: `${newMember.user.tag ?? newMember.user.username} (${newMember.id})` },
-        { name: "Moderator", value: executor ? `${executor.tag ?? executor.username} (${executor.id})` : "Unknown" },
-        { name: "Duration", value: isTimeout ? `<t:${Math.floor(newTs / 1000)}:R>` : "Removed" },
-        { name: "Reason", value: (details && details.reason) || "No reason provided" }
-      )
-      .setTimestamp(new Date())
-      .setThumbnail(newMember.user.displayAvatarURL());
-
-    await sendLog(newMember.guild, embed);
-  } catch (err) {
-    console.error("timeout handling error", err);
-  }
-});
+setupModLog(client, config);
+setupMessageLog(client, config);
+setupTickets(client, config);
+setupVerify(client, config);
 
 client.on(Events.Error, (err) => console.error("client error", err));
 client.on(Events.Warn, (msg) => console.warn("client warn", msg));
 
-async function resolveUser(guild, id) {
-  if (!id) return null;
-  try {
-    return await guild.client.users.fetch(id);
-  } catch {
-    return null;
-  }
-}
-
-async function findTimeoutEntry(guild, targetId) {
-  try {
-    const logs = await guild.fetchAuditLogs({ type: AuditLogEvent.MemberUpdate, limit: 5 });
-    const now = Date.now();
-    for (const entry of logs.entries.values()) {
-      if (entry.targetId !== targetId) continue;
-      if (now - entry.createdTimestamp > 15000) continue;
-      const changedTimeout = entry.changes.some(
-        (c) => c.key === "communication_disabled_until"
-      );
-      if (changedTimeout) {
-        return { executorId: entry.executorId, reason: entry.reason };
-      }
-    }
-  } catch (err) {
-    console.error("fetchAuditLogs failed", err && err.message ? err.message : err);
-  }
-  return null;
-}
-
-async function sendLog(guild, embed) {
-  try {
-    const channel = await guild.channels.fetch(logChannelId);
-    if (!channel) return;
-    await channel.send({ embeds: [embed] });
-  } catch (err) {
-    console.error("send log failed", err && err.message ? err.message : err);
-  }
-}
-
-client.login(token);
+client.login(config.token);
