@@ -22,6 +22,12 @@ export const ticketDefinition = new SlashCommandBuilder()
   .setDescription("Open a support ticket")
   .toJSON();
 
+export const panelDefinition = new SlashCommandBuilder()
+  .setName("ticketpanel")
+  .setDescription("Post the ticket panel with instructions")
+  .addChannelOption((o) => o.setName("channel").setDescription("Channel to post the panel in (defaults to current)"))
+  .toJSON();
+
 const MEMBER_ALLOW = [
   PermissionFlagsBits.ViewChannel,
   PermissionFlagsBits.SendMessages,
@@ -42,6 +48,12 @@ export function setupTickets(client, config) {
   client.on(Events.InteractionCreate, async (interaction) => {
     try {
       if (interaction.isChatInputCommand() && interaction.commandName === "ticket") {
+        return await showTicketModal(interaction, config);
+      }
+      if (interaction.isChatInputCommand() && interaction.commandName === "ticketpanel") {
+        return await postPanel(client, interaction, config);
+      }
+      if (interaction.isButton() && interaction.customId === "ticket:open") {
         return await showTicketModal(interaction, config);
       }
       if (interaction.isModalSubmit() && interaction.customId === "ticket:create") {
@@ -105,6 +117,43 @@ async function showTicketModal(interaction, config) {
   );
 
   await interaction.showModal(modal);
+}
+
+async function postPanel(client, interaction, config) {
+  if (!interaction.inGuild() || !config.ticketCategoryId || !config.staffRoleId) {
+    await interaction.reply({ content: "Tickets are not configured.", flags: MessageFlags.Ephemeral });
+    return;
+  }
+  if (!interaction.member.roles.cache.has(config.staffRoleId)) {
+    await interaction.reply({ content: "Only staff can post the ticket panel.", flags: MessageFlags.Ephemeral });
+    return;
+  }
+
+  const target = interaction.options.getChannel("channel") || interaction.channel;
+  if (!target || !target.isTextBased()) {
+    await interaction.reply({ content: "Invalid channel.", flags: MessageFlags.Ephemeral });
+    return;
+  }
+
+  const embed = new EmbedBuilder()
+    .setTitle("Open a Ticket")
+    .setDescription(
+      "Need help from staff? Click the **Open Ticket** button below.\n\n" +
+        "**How it works:**\n" +
+        "1. Click **Open Ticket**\n" +
+        "2. Choose a **category** and fill out the form\n" +
+        "3. A private channel is created for you and staff\n" +
+        "4. A staff member will respond as soon as possible\n\n" +
+        "*Only you and staff can see your ticket.*"
+    )
+    .setColor(0x5865f2);
+
+  const row = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId("ticket:open").setLabel("Open Ticket").setStyle(ButtonStyle.Primary).setEmoji("🎫")
+  );
+
+  await target.send({ embeds: [embed], components: [row] });
+  await interaction.reply({ content: `Panel posted in <#${target.id}>.`, flags: MessageFlags.Ephemeral });
 }
 
 async function createTicket(client, interaction, config) {

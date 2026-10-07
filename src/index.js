@@ -2,7 +2,7 @@ import "dotenv/config";
 import { Client, GatewayIntentBits, Partials, Events } from "discord.js";
 import { setupModLog } from "./modlog.js";
 import { setupMessageLog } from "./messagelog.js";
-import { setupTickets, ticketDefinition } from "./tickets.js";
+import { setupTickets, ticketDefinition, panelDefinition } from "./tickets.js";
 import { setupVerify, verifyDefinition } from "./verify.js";
 
 const config = {
@@ -43,8 +43,8 @@ client.once(Events.ClientReady, async (c) => {
   if (config.guildId) {
     try {
       const guild = await c.guilds.fetch(config.guildId);
-      await guild.commands.set([verifyDefinition, ticketDefinition]);
-      console.log("Registered guild commands: /verify, /ticket");
+      await guild.commands.set([verifyDefinition, ticketDefinition, panelDefinition]);
+      console.log("Registered guild commands: /verify, /ticket, /ticketpanel");
     } catch (err) {
       console.error("command registration failed", err);
     }
