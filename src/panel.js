@@ -39,6 +39,8 @@ export function setupPanel(client, config) {
       new ButtonBuilder().setCustomId("verify:start").setLabel("Verify yourself").setStyle(ButtonStyle.Success)
     );
 
-    await interaction.reply({ content: PANEL, components: [row] });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+    await interaction.channel.send({ content: PANEL, components: [row] });
+    await interaction.editReply({ content: "Panel posted." });
   });
 }

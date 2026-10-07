@@ -45,7 +45,9 @@ export function setupVerify(client, config) {
       const row = new ActionRowBuilder().addComponents(
         new ButtonBuilder().setCustomId("verify:start").setLabel("Verify yourself").setStyle(ButtonStyle.Primary)
       );
-      await interaction.reply({ content: PANEL_TEXT, components: [row] });
+      await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+      await interaction.channel.send({ content: PANEL_TEXT, components: [row] });
+      await interaction.editReply({ content: "Verify button posted." });
       return;
     }
 
