@@ -81,23 +81,43 @@ async function handleEdit(client, interaction, config) {
     return;
   }
 
-  const ref = parseMessageRef(interaction.options.getString("message"), interaction.channelId);
+  const raw = (interaction.options.getString("message") || "").trim();
+  const ref = parseMessageRef(raw, interaction.channelId);
+  console.log("edit: raw =", JSON.stringify(raw), "ref =", JSON.stringify(ref));
+
   if (!ref) {
     await interaction.reply({ content: "Provide a valid message link or ID.", flags: MessageFlags.Ephemeral });
     return;
   }
 
-  const channel = await client.channels.fetch(ref.channelId).catch(() => null);
+  let channel;
+  try {
+    channel = await client.channels.fetch(ref.channelId);
+  } catch (err) {
+    console.error("edit: channel fetch failed", err);
+    await interaction.reply({
+      content: `Could not access channel \`${ref.channelId}\`: ${err.message}`,
+      flags: MessageFlags.Ephemeral,
+    });
+    return;
+  }
   if (!channel || !channel.isTextBased()) {
     await interaction.reply({ content: "Could not find that channel.", flags: MessageFlags.Ephemeral });
     return;
   }
 
-  const message = await channel.messages.fetch(ref.messageId).catch(() => null);
-  if (!message) {
-    await interaction.reply({ content: "Could not find that message.", flags: MessageFlags.Ephemeral });
+  let message;
+  try {
+    message = await channel.messages.fetch(ref.messageId);
+  } catch (err) {
+    console.error("edit: message fetch failed", err);
+    await interaction.reply({
+      content: `Could not fetch message \`${ref.messageId}\` in <#${ref.channelId}>: ${err.message}`,
+      flags: MessageFlags.Ephemeral,
+    });
     return;
   }
+
   if (message.author.id !== client.user.id) {
     await interaction.reply({ content: "I can only edit my own messages.", flags: MessageFlags.Ephemeral });
     return;
