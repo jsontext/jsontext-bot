@@ -47,7 +47,7 @@ client.once(Events.ClientReady, async (c) => {
       await guild.commands.set([verifyDefinition, ticketDefinition, panelDefinition, sendDefinition, editDefinition]);
       console.log("Registered guild commands: /verify, /ticket, /ticketpanel, /send, /edit");
     } catch (err) {
-      console.error("command registration failed", err);
+      console.error("command registration failed", err && err.rawError ? JSON.stringify(err.rawError, null, 2) : err);
     }
   }
 });

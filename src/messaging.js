@@ -3,8 +3,8 @@ import { SlashCommandBuilder, Events, MessageFlags } from "discord.js";
 export const sendDefinition = new SlashCommandBuilder()
   .setName("send")
   .setDescription("Send a message as the bot")
-  .addChannelOption((o) => o.setName("channel").setDescription("Channel to send to (defaults to current)"))
   .addStringOption((o) => o.setName("message").setDescription("Message content").setRequired(true).setMaxLength(2000))
+  .addChannelOption((o) => o.setName("channel").setDescription("Channel to send to (defaults to current)"))
   .toJSON();
 
 export const editDefinition = new SlashCommandBuilder()
