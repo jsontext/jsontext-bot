@@ -6,6 +6,12 @@ import {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
+  ModalBuilder,
+  LabelBuilder,
+  TextInputBuilder,
+  TextInputStyle,
+  StringSelectMenuBuilder,
+  StringSelectMenuOptionBuilder,
   Events,
   MessageFlags,
 } from "discord.js";
@@ -24,14 +30,25 @@ const MEMBER_ALLOW = [
   PermissionFlagsBits.EmbedLinks,
 ];
 
+const TICKET_TYPES = [
+  { label: "Report a user", value: "report_user", description: "Report a member for breaking rules" },
+  { label: "Appeal", value: "appeal", description: "Appeal a ban, kick, or timeout" },
+  { label: "Technical / Bug", value: "bug", description: "Report a bug or technical problem" },
+  { label: "Purchase / Robux", value: "purchase", description: "Issues with a purchase or Robux" },
+  { label: "General question", value: "question", description: "Ask staff a general question" },
+];
+
 export function setupTickets(client, config) {
   client.on(Events.InteractionCreate, async (interaction) => {
     try {
       if (interaction.isChatInputCommand() && interaction.commandName === "ticket") {
-        return await openTicket(client, interaction, config);
+        return await showTicketModal(interaction, config);
+      }
+      if (interaction.isModalSubmit() && interaction.customId === "ticket:create") {
+        return await createTicket(client, interaction, config);
       }
       if (interaction.isButton() && interaction.customId === "ticket:close") {
-        return await closeTicket(client, interaction, config);
+        return await closeTicket(interaction, config);
       }
     } catch (err) {
       console.error("ticket interaction error", err);
@@ -42,11 +59,60 @@ export function setupTickets(client, config) {
   });
 }
 
-async function openTicket(client, interaction, config) {
+async function showTicketModal(interaction, config) {
   if (!interaction.inGuild() || !config.ticketCategoryId || !config.staffRoleId) {
     await interaction.reply({ content: "Tickets are not configured.", flags: MessageFlags.Ephemeral });
     return;
   }
+
+  const typeSelect = new StringSelectMenuBuilder()
+    .setCustomId("ticketType")
+    .setPlaceholder("Choose a category")
+    .setRequired(true)
+    .addOptions(
+      TICKET_TYPES.map((t) =>
+        new StringSelectMenuOptionBuilder().setLabel(t.label).setValue(t.value).setDescription(t.description)
+      )
+    );
+
+  const summaryInput = new TextInputBuilder()
+    .setCustomId("summary")
+    .setStyle(TextInputStyle.Short)
+    .setPlaceholder("Short summary of your ticket")
+    .setMaxLength(100)
+    .setRequired(true);
+
+  const detailsInput = new TextInputBuilder()
+    .setCustomId("details")
+    .setStyle(TextInputStyle.Paragraph)
+    .setPlaceholder("Describe what happened in detail. Include usernames, times, and evidence/citations.")
+    .setMinLength(20)
+    .setMaxLength(1500)
+    .setRequired(true);
+
+  const evidenceInput = new TextInputBuilder()
+    .setCustomId("evidence")
+    .setStyle(TextInputStyle.Paragraph)
+    .setPlaceholder("Optional: links or references to evidence")
+    .setMaxLength(1000)
+    .setRequired(false);
+
+  const modal = new ModalBuilder().setCustomId("ticket:create").setTitle("Open a Ticket").addLabelComponents(
+    new LabelBuilder().setLabel("Ticket type").setStringSelectMenuComponent(typeSelect),
+    new LabelBuilder().setLabel("Summary").setTextInputComponent(summaryInput),
+    new LabelBuilder().setLabel("What happened?").setTextInputComponent(detailsInput),
+    new LabelBuilder().setLabel("Evidence (optional)").setTextInputComponent(evidenceInput)
+  );
+
+  await interaction.showModal(modal);
+}
+
+async function createTicket(client, interaction, config) {
+  const typeValue = interaction.fields.getStringSelectValues("ticketType")[0];
+  const typeLabel = (TICKET_TYPES.find((t) => t.value === typeValue) || {}).label || typeValue;
+  const summary = interaction.fields.getTextInputValue("summary");
+  const details = interaction.fields.getTextInputValue("details");
+  const evidence = interaction.fields.getTextInputValue("evidence");
 
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
@@ -58,7 +124,7 @@ async function openTicket(client, interaction, config) {
     name,
     type: ChannelType.GuildText,
     parent: config.ticketCategoryId,
-    topic: `Ticket #${number} | opener: ${interaction.user.id}`,
+    topic: `Ticket #${number} | ${typeLabel} | opener: ${interaction.user.id}`,
     permissionOverwrites: [
       { id: guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] },
       { id: interaction.user.id, allow: MEMBER_ALLOW },
@@ -67,13 +133,19 @@ async function openTicket(client, interaction, config) {
     ],
   });
 
-  addTicket(channel.id, { number, ownerId: interaction.user.id, createdAt: Date.now() });
+  addTicket(channel.id, { number, ownerId: interaction.user.id, type: typeLabel, createdAt: Date.now() });
 
   const embed = new EmbedBuilder()
-    .setTitle(`Ticket #${number}`)
-    .setDescription(`Hello <@${interaction.user.id}>, staff will be with you shortly.\n\nWhen you're done, press **Close Ticket** below.`)
+    .setTitle(`Ticket #${number} — ${typeLabel}`)
     .setColor(0x5865f2)
+    .addFields(
+      { name: "Opened by", value: `<@${interaction.user.id}>` },
+      { name: "Summary", value: summary || "*(none)*" },
+      { name: "Details", value: details || "*(none)*" }
+    )
     .setTimestamp(new Date());
+
+  if (evidence) embed.addFields({ name: "Evidence", value: evidence });
 
   const row = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId("ticket:close").setLabel("Close Ticket").setStyle(ButtonStyle.Danger)
@@ -83,14 +155,16 @@ async function openTicket(client, interaction, config) {
   await interaction.editReply({ content: `Your ticket is open: <#${channel.id}>` });
 }
 
-async function closeTicket(client, interaction, config) {
-  const ticket = getTicket(interaction.channelId);
-  const member = interaction.member;
-  const isStaff = member.roles.cache.has(config.staffRoleId);
-  const isOwner = ticket && ticket.ownerId === interaction.user.id;
+async function closeTicket(interaction, config) {
+  const isStaff = interaction.member.roles.cache.has(config.staffRoleId);
+  if (!isStaff) {
+    await interaction.reply({ content: "Only staff can close tickets.", flags: MessageFlags.Ephemeral });
+    return;
+  }
 
-  if (!ticket || (!isStaff && !isOwner)) {
-    await interaction.reply({ content: "Only the ticket opener or staff can close this.", flags: MessageFlags.Ephemeral });
+  const ticket = getTicket(interaction.channelId);
+  if (!ticket) {
+    await interaction.reply({ content: "This isn't a ticket channel.", flags: MessageFlags.Ephemeral });
     return;
   }
 
