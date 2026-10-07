@@ -24,9 +24,8 @@ async function replyWithLink(interaction, config) {
 
   await interaction.reply({
     content:
-      "**Verify Your Roblox Account**\n" +
-      "-# Fast, safe, and automated. This process uses Roblox's official OAuth 2.0 API to link your profile without ever accessing your password or sensitive data.\n\n" +
-      `[Verify](${link})`,
+      `**[Verify](${link}) Your Roblox Account**\n` +
+      "-# Fast, safe, and automated. This process uses Roblox's official OAuth 2.0 API to link your profile without ever accessing your password or sensitive data.",
     flags: MessageFlags.Ephemeral,
   });
 }
