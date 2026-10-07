@@ -44,24 +44,32 @@ const TICKET_TYPES = [
   { label: "General question", value: "question", description: "Ask staff a general question" },
 ];
 
-const PANEL = `# 🎫 Server Support Tickets
+const PANEL_INTRO =
+  "Need help from staff? Click the **Open Ticket** button below.\n\n" +
+  "**How to open a ticket**\n" +
+  "1. Click **Open Ticket**\n" +
+  "2. Choose a category and complete every field\n" +
+  "3. A private channel is created for you and staff\n\n" +
+  "**Support Rules**";
 
-Need help from staff? Click the **Open Ticket** button below.
--# Choose a category, fill out every required field accurately, and submit. A private channel is created for you and staff.
-
-**Support Rules**
-
-**1. Complete All Mandatory Fields Before Submission**
--# Every designated prompt, template question, and required field must be accurately and thoroughly filled out before opening a ticket. Submissions containing placeholder text, incomplete details, or blank responses will be closed without action until proper information is provided.
-
-**2. Tickets Are for Legitimate Support Only: No Trolling or Pranks**
--# The ticketing system is reserved strictly for genuine inquiries, technical help, and server reports. Opening tickets to spam, test bots, send memes, troll staff, or waste moderator time will result in an immediate ticket termination and a temporary or permanent restriction from support channels.
-
-**3. Protect Confidentiality: Do Not Share Personal Identifiable Information (PII)**
--# For the safety of everyone involved, never share your own or anyone else's private personal information within tickets. This includes real names, physical addresses, phone numbers, private photos, passwords, financial records, IP addresses, or off-platform communication logs without consent.
-
-**4. Keep Inquiries Focused and Professional**
--# Use one ticket per individual issue, explain your problem clearly in a single descriptive overview, and avoid opening multiple tickets for the same request. Maintaining clear, concise, and courteous communication allows our support team to investigate and resolve your request as efficiently as possible.`;
+const RULES = [
+  {
+    title: "1. Complete All Mandatory Fields Before Submission",
+    body: "Every designated prompt, template question, and required field must be accurately and thoroughly filled out before opening a ticket. Submissions containing placeholder text, incomplete details, or blank responses will be closed without action until proper information is provided.",
+  },
+  {
+    title: "2. Tickets Are for Legitimate Support Only: No Trolling or Pranks",
+    body: "The ticketing system is reserved strictly for genuine inquiries, technical help, and server reports. Opening tickets to spam, test bots, send memes, troll staff, or waste moderator time will result in an immediate ticket termination and a temporary or permanent restriction from support channels.",
+  },
+  {
+    title: "3. Protect Confidentiality: Do Not Share Personal Identifiable Information (PII)",
+    body: "For the safety of everyone involved, never share your own or anyone else's private personal information within tickets. This includes real names, physical addresses, phone numbers, private photos, passwords, financial records, IP addresses, or off-platform communication logs without consent.",
+  },
+  {
+    title: "4. Keep Inquiries Focused and Professional",
+    body: "Use one ticket per individual issue, explain your problem clearly in a single descriptive overview, and avoid opening multiple tickets for the same request. Maintaining clear, concise, and courteous communication allows our support team to investigate and resolve your request as efficiently as possible.",
+  },
+];
 
 export function setupTickets(client, config) {
   client.on(Events.InteractionCreate, async (interaction) => {
@@ -154,17 +162,18 @@ async function postPanel(client, interaction, config) {
     return;
   }
 
+  const rulesText = RULES.map((r) => `**${r.title}**\n${r.body}`).join("\n\n");
+
+  const embed = new EmbedBuilder()
+    .setTitle("Server Support Tickets")
+    .setDescription(`${PANEL_INTRO}\n\n${rulesText}`)
+    .setColor(0x5865f2);
+
   const row = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId("ticket:open").setLabel("Open Ticket").setStyle(ButtonStyle.Primary).setEmoji("🎫")
+    new ButtonBuilder().setCustomId("ticket:open").setLabel("Open Ticket").setStyle(ButtonStyle.Primary)
   );
 
-  if (PANEL.length <= 1900) {
-    await target.send({ content: PANEL, components: [row] });
-  } else {
-    await target.send({ content: PANEL });
-    await target.send({ content: "**Click below to open a ticket.**", components: [row] });
-  }
-
+  await target.send({ embeds: [embed], components: [row] });
   await interaction.reply({ content: `Panel posted in <#${target.id}>.`, flags: MessageFlags.Ephemeral });
 }
 
