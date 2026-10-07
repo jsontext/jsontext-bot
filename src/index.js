@@ -3,7 +3,7 @@ import { Client, GatewayIntentBits, Partials, Events } from "discord.js";
 import { setupModLog } from "./modlog.js";
 import { setupMessageLog } from "./messagelog.js";
 import { setupTickets } from "./tickets.js";
-import { setupVerify, verifyDefinition } from "./verify.js";
+import { setupVerify, spawnVerifyDefinition } from "./verify.js";
 import { setupMessaging, sendDefinition, editDefinition } from "./messaging.js";
 import { setupIssues, issueDefinition } from "./issues.js";
 
@@ -46,8 +46,8 @@ client.once(Events.ClientReady, async (c) => {
   if (config.guildId) {
     try {
       const guild = await c.guilds.fetch(config.guildId);
-      await guild.commands.set([verifyDefinition, issueDefinition, sendDefinition, editDefinition]);
-      console.log("Registered guild commands: /verify, /issue, /send, /edit");
+      await guild.commands.set([spawnVerifyDefinition, issueDefinition, sendDefinition, editDefinition]);
+      console.log("Registered guild commands: /spawnverifybutton, /issue, /send, /edit");
     } catch (err) {
       console.error("command registration failed", err && err.rawError ? JSON.stringify(err.rawError, null, 2) : err);
     }

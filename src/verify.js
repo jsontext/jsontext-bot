@@ -1,10 +1,14 @@
 import crypto from "node:crypto";
-import { SlashCommandBuilder, Events, MessageFlags } from "discord.js";
+import { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, Events, MessageFlags } from "discord.js";
 
-export const verifyDefinition = new SlashCommandBuilder()
-  .setName("verify")
-  .setDescription("Get a link to verify your Roblox account")
+export const spawnVerifyDefinition = new SlashCommandBuilder()
+  .setName("spawnverifybutton")
+  .setDescription("Spawn a 'Verify yourself' button in this channel")
   .toJSON();
+
+const PANEL_TEXT =
+  "**Verify Your Roblox Account**\n" +
+  "-# Fast, safe, and automated. This process uses Roblox's official OAuth 2.0 API to link your profile without ever accessing your password or sensitive data.";
 
 export function signVerifyToken(discordId, secret, ttlSeconds = 900) {
   const payload = { d: discordId, exp: Math.floor(Date.now() / 1000) + ttlSeconds };
@@ -32,10 +36,19 @@ async function replyWithLink(interaction, config) {
 
 export function setupVerify(client, config) {
   client.on(Events.InteractionCreate, async (interaction) => {
-    if (interaction.isChatInputCommand() && interaction.commandName === "verify") {
-      await replyWithLink(interaction, config);
+    if (interaction.isChatInputCommand() && interaction.commandName === "spawnverifybutton") {
+      if (config.staffRoleId && interaction.member && !interaction.member.roles.cache.has(config.staffRoleId)) {
+        await interaction.reply({ content: "Only staff can spawn the verify button.", flags: MessageFlags.Ephemeral });
+        return;
+      }
+
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId("verify:start").setLabel("Verify yourself").setStyle(ButtonStyle.Primary)
+      );
+      await interaction.reply({ content: PANEL_TEXT, components: [row] });
       return;
     }
+
     if (interaction.isButton() && interaction.customId === "verify:start") {
       await replyWithLink(interaction, config);
     }
