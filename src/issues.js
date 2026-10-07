@@ -3,10 +3,18 @@ import { SlashCommandBuilder, EmbedBuilder, Events, MessageFlags } from "discord
 export const issueDefinition = new SlashCommandBuilder()
   .setName("issue")
   .setDescription("Post an issue to the issues channel")
-  .addStringOption((o) => o.setName("description").setDescription("Description").setRequired(true).setMaxLength(2000))
+  .addStringOption((o) =>
+    o
+      .setName("description")
+      .setDescription("First line becomes the title; the rest becomes the body")
+      .setRequired(true)
+      .setMaxLength(6000)
+  )
   .toJSON();
 
 const EMBED_COLOR = 0x808080;
+const CHUNK = 3800;
+const MAX_EMBEDS = 10;
 
 export function setupIssues(client, config) {
   client.on(Events.InteractionCreate, async (interaction) => {
@@ -18,7 +26,7 @@ export function setupIssues(client, config) {
         return;
       }
 
-      const description = interaction.options.getString("description");
+      const raw = interaction.options.getString("description") || "";
 
       await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
@@ -36,14 +44,27 @@ export function setupIssues(client, config) {
           ? member.displayAvatarURL()
           : interaction.user.displayAvatarURL();
 
-      const unix = Math.floor(Date.now() / 1000);
+      const lines = raw.split("\n");
+      const title = (lines[0] || "").slice(0, 256);
+      const body = lines.slice(1).join("\n").trim();
 
-      const embed = new EmbedBuilder()
-        .setAuthor({ name: `${authorName} • <t:${unix}:f>`, iconURL: authorIcon })
+      const chunks = [];
+      if (body) {
+        for (let i = 0; i < body.length; i += CHUNK) chunks.push(body.slice(i, i + CHUNK));
+      }
+
+      const first = new EmbedBuilder()
         .setColor(EMBED_COLOR)
-        .setDescription(description);
+        .setAuthor({ name: authorName, iconURL: authorIcon });
+      if (title) first.setTitle(title);
+      if (chunks[0]) first.setDescription("```\n" + chunks[0] + "\n```");
 
-      const message = await channel.send({ embeds: [embed] });
+      const embeds = [first];
+      for (let i = 1; i < chunks.length && embeds.length < MAX_EMBEDS; i++) {
+        embeds.push(new EmbedBuilder().setColor(EMBED_COLOR).setDescription("```\n" + chunks[i] + "\n```"));
+      }
+
+      const message = await channel.send({ embeds });
       await interaction.editReply({
         content: `Posted: https://discord.com/channels/${interaction.guildId}/${channel.id}/${message.id}`,
       });
