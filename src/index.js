@@ -6,6 +6,7 @@ import { setupTickets } from "./tickets.js";
 import { setupVerify, spawnVerifyDefinition } from "./verify.js";
 import { setupMessaging, sendDefinition, editDefinition } from "./messaging.js";
 import { setupIssues, issueDefinition } from "./issues.js";
+import { setupPanel, panelDefinition } from "./panel.js";
 
 const config = {
   token: process.env.DISCORD_BOT_TOKEN,
@@ -46,8 +47,14 @@ client.once(Events.ClientReady, async (c) => {
   if (config.guildId) {
     try {
       const guild = await c.guilds.fetch(config.guildId);
-      await guild.commands.set([spawnVerifyDefinition, issueDefinition, sendDefinition, editDefinition]);
-      console.log("Registered guild commands: /spawnverifybutton, /issue, /send, /edit");
+      await guild.commands.set([
+        spawnVerifyDefinition,
+        panelDefinition,
+        issueDefinition,
+        sendDefinition,
+        editDefinition,
+      ]);
+      console.log("Registered guild commands: /spawnverifybutton, /spawnpanel, /issue, /send, /edit");
     } catch (err) {
       console.error("command registration failed", err && err.rawError ? JSON.stringify(err.rawError, null, 2) : err);
     }
@@ -60,6 +67,7 @@ setupTickets(client, config);
 setupVerify(client, config);
 setupMessaging(client, config);
 setupIssues(client, config);
+setupPanel(client, config);
 
 client.on(Events.Error, (err) => console.error("client error", err));
 client.on(Events.Warn, (msg) => console.warn("client warn", msg));
