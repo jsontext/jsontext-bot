@@ -45,11 +45,18 @@ export function setupIssues(client, config) {
         return;
       }
 
+      const member = interaction.member;
+      const authorName =
+        member && member.displayName ? member.displayName : interaction.user.globalName || interaction.user.username;
+      const authorIcon =
+        member && typeof member.displayAvatarURL === "function"
+          ? member.displayAvatarURL()
+          : interaction.user.displayAvatarURL();
+
       const embed = new EmbedBuilder()
-        .setTitle(meta.label)
+        .setAuthor({ name: authorName, iconURL: authorIcon })
         .setColor(meta.color)
         .setDescription(description)
-        .setFooter({ text: `Posted by ${interaction.user.tag ?? interaction.user.username}` })
         .setTimestamp(new Date());
 
       const message = await channel.send({ embeds: [embed] });

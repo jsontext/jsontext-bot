@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, Events, MessageFlags } from "discord.js";
+import { SlashCommandBuilder, EmbedBuilder, Events, MessageFlags } from "discord.js";
 
 export const sendDefinition = new SlashCommandBuilder()
   .setName("send")
@@ -89,7 +89,13 @@ async function handleEdit(client, interaction, config) {
     return;
   }
 
-  await message.edit({ content: interaction.options.getString("content") });
+  const newContent = interaction.options.getString("content");
+  if (message.embeds.length > 0) {
+    const embed = EmbedBuilder.from(message.embeds[0]).setDescription(newContent);
+    await message.edit({ embeds: [embed] });
+  } else {
+    await message.edit({ content: newContent });
+  }
   await interaction.reply({
     content: `Edited: https://discord.com/channels/${interaction.guildId}/${ref.channelId}/${ref.messageId}`,
     flags: MessageFlags.Ephemeral,
