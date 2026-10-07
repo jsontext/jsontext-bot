@@ -1,9 +1,10 @@
-import { SlashCommandBuilder, EmbedBuilder, Events, MessageFlags } from "discord.js";
+import { SlashCommandBuilder, EmbedBuilder, AttachmentBuilder, Events, MessageFlags } from "discord.js";
 
 export const sendDefinition = new SlashCommandBuilder()
   .setName("send")
   .setDescription("Send a message as the bot")
-  .addStringOption((o) => o.setName("message").setDescription("Message content").setRequired(true).setMaxLength(2000))
+  .addStringOption((o) => o.setName("message").setDescription("Message content").setMaxLength(2000))
+  .addAttachmentOption((o) => o.setName("image").setDescription("Optional image or file"))
   .addChannelOption((o) => o.setName("channel").setDescription("Channel to send to (defaults to current)"))
   .toJSON();
 
@@ -47,14 +48,27 @@ async function handleSend(client, interaction, config) {
   }
 
   const target = interaction.options.getChannel("channel") || interaction.channel;
-  const content = interaction.options.getString("message");
+  const content = interaction.options.getString("message") || "";
+  const attachment = interaction.options.getAttachment("image");
 
   if (!target || !target.isTextBased()) {
     await interaction.reply({ content: "Invalid channel.", flags: MessageFlags.Ephemeral });
     return;
   }
+  if (!content && !attachment) {
+    await interaction.reply({ content: "Provide a message or an image.", flags: MessageFlags.Ephemeral });
+    return;
+  }
 
-  const sent = await target.send({ content });
+  const payload = {};
+  if (content) payload.content = content;
+  if (attachment) {
+    const res = await fetch(attachment.url);
+    const buffer = Buffer.from(await res.arrayBuffer());
+    payload.files = [new AttachmentBuilder(buffer, { name: attachment.name })];
+  }
+
+  const sent = await target.send(payload);
   await interaction.reply({
     content: `Sent: https://discord.com/channels/${interaction.guildId}/${sent.channelId}/${sent.id}`,
     flags: MessageFlags.Ephemeral,
