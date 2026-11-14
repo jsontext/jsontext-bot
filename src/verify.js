@@ -54,7 +54,7 @@ async function replyWithLink(interaction, config) {
   if (verifyCache.size > 500) verifyCache.clear();
   verifyCache.set(userId, { token, expiresAt, cooldownUntil: now + COOLDOWN_MS });
 
-  const link = `${config.verifyBaseUrl}/?t=${token}`;
+  const link = `${config.verifyBaseUrl}/verify?t=${token}`;
 
   await interaction.reply({
     content:
