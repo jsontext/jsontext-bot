@@ -1,8 +1,16 @@
-import { SlashCommandBuilder, EmbedBuilder, AttachmentBuilder, Events, MessageFlags } from "discord.js";
+import {
+  SlashCommandBuilder,
+  EmbedBuilder,
+  AttachmentBuilder,
+  Events,
+  MessageFlags,
+  PermissionFlagsBits,
+} from "discord.js";
 
 export const sendDefinition = new SlashCommandBuilder()
   .setName("send")
   .setDescription("Send a message as the bot")
+  .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
   .addStringOption((o) => o.setName("message").setDescription("Message content").setMaxLength(2000))
   .addAttachmentOption((o) => o.setName("image").setDescription("Optional image or file"))
   .addChannelOption((o) => o.setName("channel").setDescription("Channel to send to (defaults to current)"))
@@ -11,16 +19,24 @@ export const sendDefinition = new SlashCommandBuilder()
 export const editDefinition = new SlashCommandBuilder()
   .setName("edit")
   .setDescription("Edit a message the bot sent")
+  .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
   .addStringOption((o) => o.setName("message").setDescription("Message link or message ID").setRequired(true))
   .addStringOption((o) => o.setName("content").setDescription("New content").setRequired(true).setMaxLength(2000))
   .toJSON();
 
-export function setupMessaging(client, config) {
+export function setupMessaging(client) {
   client.on(Events.InteractionCreate, async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
+    if (interaction.commandName !== "send" && interaction.commandName !== "edit") return;
+
+    if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
+      await interaction.reply({ content: "Only administrators can use this command.", flags: MessageFlags.Ephemeral });
+      return;
+    }
+
     try {
-      if (interaction.commandName === "send") return await handleSend(client, interaction, config);
-      if (interaction.commandName === "edit") return await handleEdit(client, interaction, config);
+      if (interaction.commandName === "send") return await handleSend(interaction);
+      if (interaction.commandName === "edit") return await handleEdit(client, interaction);
     } catch (err) {
       console.error("messaging command error", err);
       if (!interaction.replied && !interaction.deferred) {
@@ -30,10 +46,6 @@ export function setupMessaging(client, config) {
   });
 }
 
-function isStaff(interaction, config) {
-  return interaction.member && interaction.member.roles.cache.has(config.staffRoleId);
-}
-
 function parseMessageRef(input, fallbackChannelId) {
   const link = input.match(/channels\/(\d+)\/(\d+)\/(\d+)/);
   if (link) return { channelId: link[2], messageId: link[3] };
@@ -41,11 +53,7 @@ function parseMessageRef(input, fallbackChannelId) {
   return null;
 }
 
-async function handleSend(client, interaction, config) {
-  if (!isStaff(interaction, config)) {
-    await interaction.reply({ content: "Only staff can use this.", flags: MessageFlags.Ephemeral });
-    return;
-  }
+async function handleSend(interaction) {
 
   const target = interaction.options.getChannel("channel") || interaction.channel;
   const content = interaction.options.getString("message") || "";
@@ -75,11 +83,7 @@ async function handleSend(client, interaction, config) {
   });
 }
 
-async function handleEdit(client, interaction, config) {
-  if (!isStaff(interaction, config)) {
-    await interaction.reply({ content: "Only staff can use this.", flags: MessageFlags.Ephemeral });
-    return;
-  }
+async function handleEdit(client, interaction) {
 
   const raw = (interaction.options.getString("message") || "").trim();
   const ref = parseMessageRef(raw, interaction.channelId);

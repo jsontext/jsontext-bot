@@ -3,40 +3,63 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const dir = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "data");
-const file = path.join(dir, "tickets.json");
+const ticketsFile = path.join(dir, "tickets.json");
+const verifiedFile = path.join(dir, "verified.json");
 
-function load() {
+function readJson(targetFile, fallback) {
   try {
-    return JSON.parse(fs.readFileSync(file, "utf8"));
+    return JSON.parse(fs.readFileSync(targetFile, "utf8"));
   } catch {
-    return { counter: 0, tickets: {} };
+    return fallback;
   }
 }
 
-function save(data) {
+function writeJson(targetFile, data) {
   fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(file, JSON.stringify(data, null, 2));
+  fs.writeFileSync(targetFile, JSON.stringify(data, null, 2));
 }
 
 export function nextTicketNumber() {
-  const data = load();
+  const data = readJson(ticketsFile, { counter: 0, tickets: {} });
   data.counter = (data.counter || 0) + 1;
-  save(data);
+  writeJson(ticketsFile, data);
   return data.counter;
 }
 
 export function addTicket(channelId, info) {
-  const data = load();
+  const data = readJson(ticketsFile, { counter: 0, tickets: {} });
   data.tickets[channelId] = info;
-  save(data);
+  writeJson(ticketsFile, data);
 }
 
 export function getTicket(channelId) {
-  return load().tickets[channelId] || null;
+  return readJson(ticketsFile, { counter: 0, tickets: {} }).tickets[channelId] || null;
 }
 
 export function removeTicket(channelId) {
-  const data = load();
+  const data = readJson(ticketsFile, { counter: 0, tickets: {} });
   delete data.tickets[channelId];
-  save(data);
+  writeJson(ticketsFile, data);
+}
+
+export function saveVerifiedUser(discordId, { robloxId, robloxUsername, verifiedAt }) {
+  const data = readJson(verifiedFile, { users: {} });
+  data.users[discordId] = {
+    discordId,
+    robloxId: String(robloxId),
+    robloxUsername: robloxUsername || "",
+    verifiedAt: verifiedAt || new Date().toISOString(),
+  };
+  writeJson(verifiedFile, data);
+}
+
+export function getVerifiedByDiscord(discordId) {
+  const data = readJson(verifiedFile, { users: {} });
+  return data.users[discordId] || null;
+}
+
+export function getVerifiedByRoblox(robloxId) {
+  const target = String(robloxId).trim();
+  const data = readJson(verifiedFile, { users: {} });
+  return Object.values(data.users).find((entry) => entry.robloxId === target) || null;
 }

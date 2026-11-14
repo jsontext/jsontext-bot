@@ -3,10 +3,9 @@ import { Client, GatewayIntentBits, Partials, Events } from "discord.js";
 import { setupModLog } from "./modlog.js";
 import { setupMessageLog } from "./messagelog.js";
 import { setupTickets } from "./tickets.js";
-import { setupVerify, spawnVerifyDefinition } from "./verify.js";
+import { setupVerify, findDefinition } from "./verify.js";
 import { setupMessaging, sendDefinition, editDefinition } from "./messaging.js";
 import { setupIssues, issueDefinition } from "./issues.js";
-import { setupPanel, panelDefinition } from "./panel.js";
 
 const config = {
   token: process.env.DISCORD_BOT_TOKEN,
@@ -29,6 +28,7 @@ const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildMessages,
     GatewayIntentBits.GuildModeration,
     GatewayIntentBits.MessageContent,
   ],
@@ -48,13 +48,12 @@ client.once(Events.ClientReady, async (c) => {
     try {
       const guild = await c.guilds.fetch(config.guildId);
       await guild.commands.set([
-        spawnVerifyDefinition,
-        panelDefinition,
+        findDefinition,
         issueDefinition,
         sendDefinition,
         editDefinition,
       ]);
-      console.log("Registered guild commands: /spawnverifybutton, /spawnpanel, /issue, /send, /edit");
+      console.log("Registered guild commands: /find, /issue, /send, /edit");
     } catch (err) {
       console.error("command registration failed", err && err.rawError ? JSON.stringify(err.rawError, null, 2) : err);
     }
@@ -67,7 +66,6 @@ setupTickets(client, config);
 setupVerify(client, config);
 setupMessaging(client, config);
 setupIssues(client, config);
-setupPanel(client, config);
 
 client.on(Events.Error, (err) => console.error("client error", err));
 client.on(Events.Warn, (msg) => console.warn("client warn", msg));

@@ -1,8 +1,9 @@
-import { SlashCommandBuilder, EmbedBuilder, Events, MessageFlags } from "discord.js";
+import { SlashCommandBuilder, EmbedBuilder, Events, MessageFlags, PermissionFlagsBits } from "discord.js";
 
 export const issueDefinition = new SlashCommandBuilder()
   .setName("issue")
   .setDescription("Post an issue card to the issues channel")
+  .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
   .addStringOption((o) =>
     o.setName("state").setDescription("State of the card").setRequired(true).setMaxLength(100)
   )
@@ -16,6 +17,11 @@ const EMBED_COLOR = 0x2f3136;
 export function setupIssues(client, config) {
   client.on(Events.InteractionCreate, async (interaction) => {
     if (!interaction.isChatInputCommand() || interaction.commandName !== "issue") return;
+
+    if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
+      await interaction.reply({ content: "Only administrators can use this command.", flags: MessageFlags.Ephemeral });
+      return;
+    }
 
     try {
       if (!config.issueChannelId) {
