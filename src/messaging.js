@@ -24,10 +24,18 @@ export const editDefinition = new SlashCommandBuilder()
   .addStringOption((o) => o.setName("content").setDescription("New content").setRequired(true).setMaxLength(2000))
   .toJSON();
 
+export const copyDefinition = new SlashCommandBuilder()
+  .setName("copy")
+  .setDescription("Copy a message (including embeds) and repost it as the bot")
+  .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+  .addStringOption((o) => o.setName("message").setDescription("Message link or message ID").setRequired(true))
+  .addChannelOption((o) => o.setName("channel").setDescription("Channel to send to (defaults to current)"))
+  .toJSON();
+
 export function setupMessaging(client) {
   client.on(Events.InteractionCreate, async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
-    if (interaction.commandName !== "send" && interaction.commandName !== "edit") return;
+    if (interaction.commandName !== "send" && interaction.commandName !== "edit" && interaction.commandName !== "copy") return;
 
     if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
       await interaction.reply({ content: "Only administrators can use this command.", flags: MessageFlags.Ephemeral });
@@ -37,6 +45,7 @@ export function setupMessaging(client) {
     try {
       if (interaction.commandName === "send") return await handleSend(interaction);
       if (interaction.commandName === "edit") return await handleEdit(client, interaction);
+      if (interaction.commandName === "copy") return await handleCopy(client, interaction);
     } catch (err) {
       console.error("messaging command error", err);
       if (!interaction.replied && !interaction.deferred) {
@@ -136,6 +145,48 @@ async function handleEdit(client, interaction) {
   }
   await interaction.reply({
     content: `Edited: https://discord.com/channels/${interaction.guildId}/${ref.channelId}/${ref.messageId}`,
+    flags: MessageFlags.Ephemeral,
+  });
+}
+
+async function handleCopy(client, interaction) {
+  const raw = (interaction.options.getString("message") || "").trim();
+  const ref = parseMessageRef(raw, interaction.channelId);
+  if (!ref) {
+    await interaction.reply({ content: "Provide a valid message link or ID.", flags: MessageFlags.Ephemeral });
+    return;
+  }
+
+  const target = interaction.options.getChannel("channel") || interaction.channel;
+  if (!target || !target.isTextBased()) {
+    await interaction.reply({ content: "Invalid target channel.", flags: MessageFlags.Ephemeral });
+    return;
+  }
+
+  const sourceChannel = await client.channels.fetch(ref.channelId).catch(() => null);
+  if (!sourceChannel || !sourceChannel.isTextBased()) {
+    await interaction.reply({ content: "Could not access source channel.", flags: MessageFlags.Ephemeral });
+    return;
+  }
+
+  const sourceMessage = await sourceChannel.messages.fetch(ref.messageId).catch(() => null);
+  if (!sourceMessage) {
+    await interaction.reply({ content: "Could not fetch that message.", flags: MessageFlags.Ephemeral });
+    return;
+  }
+
+  const payload = {};
+  if (sourceMessage.content) payload.content = sourceMessage.content;
+  if (sourceMessage.embeds.length > 0) payload.embeds = sourceMessage.embeds.map((e) => EmbedBuilder.from(e));
+
+  if (!payload.content && !payload.embeds) {
+    await interaction.reply({ content: "Message has no text or embeds to copy.", flags: MessageFlags.Ephemeral });
+    return;
+  }
+
+  const sent = await target.send(payload);
+  await interaction.reply({
+    content: `Copied: https://discord.com/channels/${interaction.guildId}/${sent.channelId}/${sent.id}`,
     flags: MessageFlags.Ephemeral,
   });
 }
