@@ -1,14 +1,12 @@
 import {
   SlashCommandBuilder,
-  ActionRowBuilder,
-  ButtonBuilder,
-  ButtonStyle,
   EmbedBuilder,
   AttachmentBuilder,
   Events,
   MessageFlags,
   PermissionFlagsBits,
 } from "discord.js";
+import { skipNextDeleteLog } from "./messagelog.js";
 
 export const sendDefinition = new SlashCommandBuilder()
   .setName("send")
@@ -35,21 +33,11 @@ export const copyDefinition = new SlashCommandBuilder()
   .addChannelOption((o) => o.setName("channel").setDescription("Channel to send to (defaults to current)"))
   .toJSON();
 
-export const panelDefinition = new SlashCommandBuilder()
-  .setName("panel")
-  .setDescription("Post the ticket and/or verify button in this channel")
+export const deleteDefinition = new SlashCommandBuilder()
+  .setName("delete")
+  .setDescription("Delete a message without sending a delete log")
   .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
-  .addStringOption((o) =>
-    o
-      .setName("type")
-      .setDescription("Which button(s) to post")
-      .setRequired(true)
-      .addChoices(
-        { name: "Both (Ticket + Verify)", value: "both" },
-        { name: "Ticket only", value: "ticket" },
-        { name: "Verify only", value: "verify" }
-      )
-  )
+  .addStringOption((o) => o.setName("message").setDescription("Message link or message ID").setRequired(true))
   .toJSON();
 
 export function setupMessaging(client) {
@@ -59,7 +47,7 @@ export function setupMessaging(client) {
       interaction.commandName !== "send" &&
       interaction.commandName !== "edit" &&
       interaction.commandName !== "copy" &&
-      interaction.commandName !== "panel"
+      interaction.commandName !== "delete"
     ) return;
 
     if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
@@ -71,7 +59,7 @@ export function setupMessaging(client) {
       if (interaction.commandName === "send") return await handleSend(interaction);
       if (interaction.commandName === "edit") return await handleEdit(client, interaction);
       if (interaction.commandName === "copy") return await handleCopy(client, interaction);
-      if (interaction.commandName === "panel") return await handlePanel(interaction);
+      if (interaction.commandName === "delete") return await handleDelete(client, interaction);
     } catch (err) {
       console.error("messaging command error", err);
       if (!interaction.replied && !interaction.deferred) {
@@ -217,18 +205,27 @@ async function handleCopy(client, interaction) {
   });
 }
 
-async function handlePanel(interaction) {
-  const type = interaction.options.getString("type");
-  const row = new ActionRowBuilder();
-
-  if (type === "both" || type === "ticket") {
-    row.addComponents(new ButtonBuilder().setCustomId("ticket:open").setLabel("Open Ticket").setStyle(ButtonStyle.Primary));
-  }
-  if (type === "both" || type === "verify") {
-    row.addComponents(new ButtonBuilder().setCustomId("verify:start").setLabel("Verify yourself").setStyle(ButtonStyle.Success));
+async function handleDelete(client, interaction) {
+  const raw = (interaction.options.getString("message") || "").trim();
+  const ref = parseMessageRef(raw, interaction.channelId);
+  if (!ref) {
+    await interaction.reply({ content: "Provide a valid message link or ID.", flags: MessageFlags.Ephemeral });
+    return;
   }
 
-  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-  await interaction.channel.send({ components: [row] });
-  await interaction.editReply({ content: "Panel posted." });
+  const channel = await client.channels.fetch(ref.channelId).catch(() => null);
+  if (!channel || !channel.isTextBased()) {
+    await interaction.reply({ content: "Could not access that channel.", flags: MessageFlags.Ephemeral });
+    return;
+  }
+
+  const message = await channel.messages.fetch(ref.messageId).catch(() => null);
+  if (!message) {
+    await interaction.reply({ content: "Could not fetch that message.", flags: MessageFlags.Ephemeral });
+    return;
+  }
+
+  skipNextDeleteLog(message.id);
+  await message.delete();
+  await interaction.reply({ content: "Message deleted.", flags: MessageFlags.Ephemeral });
 }

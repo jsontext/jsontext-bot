@@ -1,6 +1,12 @@
 import { Events, EmbedBuilder } from "discord.js";
 
 const CONTENT_LIMIT = 1000;
+const skippedDeletes = new Set();
+
+export function skipNextDeleteLog(messageId) {
+  skippedDeletes.add(messageId);
+  setTimeout(() => skippedDeletes.delete(messageId), 10_000);
+}
 
 function truncate(text, max = CONTENT_LIMIT) {
   if (!text) return "";
@@ -26,6 +32,7 @@ export function setupMessageLog(client, config) {
   client.on(Events.MessageDelete, async (message) => {
     try {
       if (!message.guild) return;
+      if (skippedDeletes.delete(message.id)) return;
       if (message.author && message.author.bot) return;
 
       const embed = new EmbedBuilder()

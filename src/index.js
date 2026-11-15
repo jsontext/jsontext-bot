@@ -4,7 +4,7 @@ import { setupModLog } from "./modlog.js";
 import { setupMessageLog } from "./messagelog.js";
 import { setupTickets } from "./tickets.js";
 import { setupVerify, findDefinition } from "./verify.js";
-import { setupMessaging, sendDefinition, editDefinition, copyDefinition, panelDefinition } from "./messaging.js";
+import { setupMessaging, sendDefinition, editDefinition, copyDefinition, deleteDefinition } from "./messaging.js";
 import { setupIssues, issueDefinition } from "./issues.js";
 
 const config = {
@@ -53,9 +53,9 @@ client.once(Events.ClientReady, async (c) => {
         sendDefinition,
         editDefinition,
         copyDefinition,
-        panelDefinition,
+        deleteDefinition,
       ]);
-      console.log("Registered guild commands: /find, /issue, /send, /edit, /copy, /panel");
+      console.log("Registered guild commands: /find, /issue, /send, /edit, /copy, /delete");
     } catch (err) {
       console.error("command registration failed", err && err.rawError ? JSON.stringify(err.rawError, null, 2) : err);
     }
