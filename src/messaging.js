@@ -1,5 +1,8 @@
 import {
   SlashCommandBuilder,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
   EmbedBuilder,
   AttachmentBuilder,
   Events,
@@ -32,10 +35,32 @@ export const copyDefinition = new SlashCommandBuilder()
   .addChannelOption((o) => o.setName("channel").setDescription("Channel to send to (defaults to current)"))
   .toJSON();
 
+export const panelDefinition = new SlashCommandBuilder()
+  .setName("panel")
+  .setDescription("Post the ticket and/or verify button in this channel")
+  .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+  .addStringOption((o) =>
+    o
+      .setName("type")
+      .setDescription("Which button(s) to post")
+      .setRequired(true)
+      .addChoices(
+        { name: "Both (Ticket + Verify)", value: "both" },
+        { name: "Ticket only", value: "ticket" },
+        { name: "Verify only", value: "verify" }
+      )
+  )
+  .toJSON();
+
 export function setupMessaging(client) {
   client.on(Events.InteractionCreate, async (interaction) => {
     if (!interaction.isChatInputCommand()) return;
-    if (interaction.commandName !== "send" && interaction.commandName !== "edit" && interaction.commandName !== "copy") return;
+    if (
+      interaction.commandName !== "send" &&
+      interaction.commandName !== "edit" &&
+      interaction.commandName !== "copy" &&
+      interaction.commandName !== "panel"
+    ) return;
 
     if (!interaction.memberPermissions?.has(PermissionFlagsBits.Administrator)) {
       await interaction.reply({ content: "Only administrators can use this command.", flags: MessageFlags.Ephemeral });
@@ -46,6 +71,7 @@ export function setupMessaging(client) {
       if (interaction.commandName === "send") return await handleSend(interaction);
       if (interaction.commandName === "edit") return await handleEdit(client, interaction);
       if (interaction.commandName === "copy") return await handleCopy(client, interaction);
+      if (interaction.commandName === "panel") return await handlePanel(interaction);
     } catch (err) {
       console.error("messaging command error", err);
       if (!interaction.replied && !interaction.deferred) {
@@ -189,4 +215,20 @@ async function handleCopy(client, interaction) {
     content: `Copied: https://discord.com/channels/${interaction.guildId}/${sent.channelId}/${sent.id}`,
     flags: MessageFlags.Ephemeral,
   });
+}
+
+async function handlePanel(interaction) {
+  const type = interaction.options.getString("type");
+  const row = new ActionRowBuilder();
+
+  if (type === "both" || type === "ticket") {
+    row.addComponents(new ButtonBuilder().setCustomId("ticket:open").setLabel("Open Ticket").setStyle(ButtonStyle.Primary));
+  }
+  if (type === "both" || type === "verify") {
+    row.addComponents(new ButtonBuilder().setCustomId("verify:start").setLabel("Verify yourself").setStyle(ButtonStyle.Success));
+  }
+
+  await interaction.deferReply({ flags: MessageFlags.Ephemeral });
+  await interaction.channel.send({ components: [row] });
+  await interaction.editReply({ content: "Panel posted." });
 }
